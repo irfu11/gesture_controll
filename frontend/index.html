@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gesture Controlled Story</title>
+
+  <style>
+    body {
+      font-family: Georgia, serif;
+      line-height: 1.6;
+      padding: 20px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    video {
+      width: 220px;
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      border: 2px solid black;
+      background: #000;
+    }
+
+    #status {
+      position: fixed;
+      top: 260px;
+      right: 20px;
+      background: #eee;
+      padding: 8px;
+      font-weight: bold;
+    }
+
+    .story p {
+      margin-bottom: 20px;
+      padding: 10px;
+    }
+
+    .highlight {
+      background: yellow;
+    }
+
+    .dark {
+      background: #121212;
+      color: #f5f5f5;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>📖 Gesture Controlled Story</h1>
+
+<div class="story" id="story">
+  <p>Once upon a time, in a quiet village surrounded by green hills, there lived a curious boy named Aarav.</p>
+
+  <p>Aarav loved exploring the forest near his home. Every tree, every sound, and every shadow fascinated him.</p>
+
+  <p>One evening, while following a glowing butterfly, he discovered an ancient door hidden behind vines.</p>
+
+  <p>The door slowly opened, revealing a world filled with floating islands and shimmering lights.</p>
+
+  <p>That night changed Aarav forever, teaching him that courage and curiosity unlock the greatest adventures.</p>
+
+  <p>And so, the boy who once wandered the forest became a legend whispered by the wind.</p>
+</div>
+
+<video id="video" autoplay></video>
+<div id="status">Waiting for gesture...</div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<!-- MediaPipe Hands + Camera utils -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+<script>
+const socket = io("http://localhost:5000");
+const video = document.getElementById("video");
+const status = document.getElementById("status");
+const paragraphs = document.querySelectorAll(".story p");
+
+let highlightIndex = 0;
+let scrolling = false;
+
+// Utility: same rule-based detection as backend's gestures_rules.py
+function fingerOpen(landmarks, tipIdx, mcpIdx) {
+  // tip.y < mcp.y means finger is open (y is downwards)
+  return landmarks[tipIdx].y < landmarks[mcpIdx].y;
+}
+
+function detectGestureFromLandmarks(landmarks) {
+  if (!landmarks || landmarks.length < 21) return 'none';
+  const thumb = fingerOpen(landmarks, 4, 2);
+  const index = fingerOpen(landmarks, 8, 5);
+  const middle = fingerOpen(landmarks, 12, 9);
+  const ring = fingerOpen(landmarks, 16, 13);
+  const pinky = fingerOpen(landmarks, 20, 17);
+
+  if (!thumb && !index && !middle && !ring && !pinky) return 'fist';
+  if (thumb && index && middle && ring && pinky) return 'open_palm';
+  if (thumb && !index && !middle && !ring && !pinky) return 'thumbs_up';
+  if (index && middle && !ring && !pinky) return 'victory';
+  if (index && pinky && !middle && !ring) return 'rock';
+  return 'none';
+}
+
+// Initialize MediaPipe Hands
+const hands = new Hands({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+  maxNumHands: 2,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+// client-side debounce: only emit when gesture changes or after interval
+let lastSentGesture = null;
+let lastSentTs = 0;
+const CLIENT_DEBOUNCE_MS = 350;
+
+hands.onResults((results) => {
+  let gesture = 'none';
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const lm = results.multiHandLandmarks[0];
+    gesture = detectGestureFromLandmarks(lm);
+
+    // additional: detect pinch (distance between thumb tip and index tip)
+    const dx = lm[4].x - lm[8].x;
+    const dy = lm[4].y - lm[8].y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 0.05) gesture = 'click';
+  }
+
+  const now = Date.now();
+  // only emit if gesture changed or debounce interval passed
+  if (gesture !== lastSentGesture || (now - lastSentTs) > CLIENT_DEBOUNCE_MS) {
+    socket.emit('gesture', gesture);
+    lastSentGesture = gesture;
+    lastSentTs = now;
+  }
+
+  status.innerText = 'Gesture: ' + gesture;
+});
+
+// Start camera using MediaPipe Camera class
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await hands.send({image: video});
+  },
+  width: 640,
+  height: 480
+});
+camera.start();
+
+// React to gesture events (brokered by server)
+socket.on('gesture', g => {
+  // ignore empty
+  if (!g) return;
+  // local UI already updated in onResults, but respond with actions
+  if (g === 'open_palm') {
+    window.scrollBy(0, 10);
+  }
+  if (g === 'fist') {
+    // stop scrolling (no continuous scroll implemented)
+  }
+  if (g === 'victory') {
+    window.scrollBy(0, -10);
+  }
+  if (g === 'thumbs_up') {
+    paragraphs.forEach(p => p.classList.remove('highlight'));
+    if (paragraphs[highlightIndex]) {
+      paragraphs[highlightIndex].classList.add('highlight');
+      paragraphs[highlightIndex].scrollIntoView({behavior:'smooth'});
+      highlightIndex = (highlightIndex + 1) % paragraphs.length;
+    }
+  }
+  if (g === 'rock') {
+    document.body.classList.toggle('dark');
+  }
+  if (g === 'click') {
+    document.elementFromPoint(window.innerWidth/2, window.innerHeight/2)?.click();
+  }
+});
+</script>
+
+</body>
+</html>

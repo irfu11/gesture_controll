@@ -1,0 +1,8 @@
+flask
+flask-socketio
+python-socketio
+eventlet
+opencv-python
+numpy
+# mediapipe omitted because server-side mediapipe is not compatible with Python 3.13
+# If you want server-side MediaPipe, use Python 3.10/3.11 and install mediapipe separately
