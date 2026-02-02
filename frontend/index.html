@@ -80,11 +80,21 @@ const status = document.getElementById("status");
 const paragraphs = document.querySelectorAll(".story p");
 
 let highlightIndex = 0;
-let scrolling = false;
 
-// Utility: same rule-based detection as backend's gestures_rules.py
+// Initialize MediaPipe Hands
+const hands = new Hands({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+  maxNumHands: 2,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+// Utility to detect gestures client-side
 function fingerOpen(landmarks, tipIdx, mcpIdx) {
-  // tip.y < mcp.y means finger is open (y is downwards)
   return landmarks[tipIdx].y < landmarks[mcpIdx].y;
 }
 
@@ -104,19 +114,7 @@ function detectGestureFromLandmarks(landmarks) {
   return 'none';
 }
 
-// Initialize MediaPipe Hands
-const hands = new Hands({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-});
-
-hands.setOptions({
-  maxNumHands: 2,
-  modelComplexity: 1,
-  minDetectionConfidence: 0.6,
-  minTrackingConfidence: 0.6
-});
-
-// client-side debounce: only emit when gesture changes or after interval
+// Client-side debounce
 let lastSentGesture = null;
 let lastSentTs = 0;
 const CLIENT_DEBOUNCE_MS = 350;
@@ -127,7 +125,7 @@ hands.onResults((results) => {
     const lm = results.multiHandLandmarks[0];
     gesture = detectGestureFromLandmarks(lm);
 
-    // additional: detect pinch (distance between thumb tip and index tip)
+    // detect pinch
     const dx = lm[4].x - lm[8].x;
     const dy = lm[4].y - lm[8].y;
     const dist = Math.sqrt(dx*dx + dy*dy);
@@ -135,9 +133,9 @@ hands.onResults((results) => {
   }
 
   const now = Date.now();
-  // only emit if gesture changed or debounce interval passed
   if (gesture !== lastSentGesture || (now - lastSentTs) > CLIENT_DEBOUNCE_MS) {
-    socket.emit('gesture', gesture);
+    console.log('Sending gesture ->', gesture);
+    socket.emit('gesture', gesture); // send to server
     lastSentGesture = gesture;
     lastSentTs = now;
   }
@@ -145,7 +143,7 @@ hands.onResults((results) => {
   status.innerText = 'Gesture: ' + gesture;
 });
 
-// Start camera using MediaPipe Camera class
+// Start camera
 const camera = new Camera(video, {
   onFrame: async () => {
     await hands.send({image: video});
@@ -155,36 +153,27 @@ const camera = new Camera(video, {
 });
 camera.start();
 
-// React to gesture events (brokered by server)
-socket.on('gesture', g => {
-  // ignore empty
-  if (!g) return;
-  // local UI already updated in onResults, but respond with actions
-  if (g === 'open_palm') {
-    window.scrollBy(0, 10);
-  }
-  if (g === 'fist') {
-    // stop scrolling (no continuous scroll implemented)
-  }
-  if (g === 'victory') {
-    window.scrollBy(0, -10);
-  }
-  if (g === 'thumbs_up') {
-    paragraphs.forEach(p => p.classList.remove('highlight'));
-    if (paragraphs[highlightIndex]) {
-      paragraphs[highlightIndex].classList.add('highlight');
-      paragraphs[highlightIndex].scrollIntoView({behavior:'smooth'});
-      highlightIndex = (highlightIndex + 1) % paragraphs.length;
-    }
-  }
-  if (g === 'rock') {
-    document.body.classList.toggle('dark');
-  }
-  if (g === 'click') {
-    document.elementFromPoint(window.innerWidth/2, window.innerHeight/2)?.click();
+// ================== REACT TO SERVER ACTIONS ==================
+socket.on("action", (action) => {
+  console.log('Received action <-', action);
+  switch(action) {
+    case "scroll_down":
+      window.scrollBy(0, 150);
+      break;
+    case "scroll_up":
+      window.scrollBy(0, -150);
+      break;
+    case "select":
+      if (paragraphs[highlightIndex]) {
+        paragraphs.forEach(p => p.classList.remove('highlight'));
+        paragraphs[highlightIndex].classList.add('highlight');
+        paragraphs[highlightIndex].scrollIntoView({behavior:'smooth'});
+        highlightIndex = (highlightIndex + 1) % paragraphs.length;
+      }
+      break;
+    case "toggle_theme":
+      document.body.classList.toggle('dark');
+      break;
   }
 });
 </script>
-
-</body>
-</html>

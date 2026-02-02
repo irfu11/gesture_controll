@@ -111,27 +111,6 @@ def connect():
 def disconnect():
     print("❌ Client disconnected")
 
-
-@socketio.on("gesture")
-def handle_client_gesture(data):
-    """Handle gesture strings sent from the client-side detector.
-    Maps gestures to actions and emits `action` events back to the frontend.
-    """
-    print("Client gesture:", data)
-    action = None
-
-    if data == "thumbs_up" or data == "click":
-        action = "select"
-    elif data == "fist":
-        action = "scroll_down"
-    elif data == "open_palm":
-        action = "scroll_up"
-    elif data == "rock":
-        action = "toggle_theme"
-
-    if action:
-        socketio.emit("action", action)
-
 # ================== RUN SERVER ==================
 if __name__ == "__main__":
     socketio.run(
