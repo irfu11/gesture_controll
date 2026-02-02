@@ -1,0 +1,7 @@
+{
+  "buildCommand": "echo 'Frontend build skipped for backend deployment'",
+  "devCommand": "python backend/app.py",
+  "env": {
+    "VITE_BACKEND_URL": "https://your-deployed-backend.com"
+  }
+}

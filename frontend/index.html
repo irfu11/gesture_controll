@@ -74,7 +74,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
-const socket = io("http://localhost:5000", {
+// Use VITE_BACKEND_URL env var or fallback to localhost for local dev
+const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+const socket = io(backendUrl, {
   transports: ["websocket", "polling"]
 });
 const video = document.getElementById("video");
