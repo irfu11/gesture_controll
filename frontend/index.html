@@ -74,7 +74,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:5000", {
+  transports: ["websocket", "polling"]
+});
 const video = document.getElementById("video");
 const status = document.getElementById("status");
 const paragraphs = document.querySelectorAll(".story p");

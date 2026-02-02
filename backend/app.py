@@ -15,7 +15,7 @@ app = Flask(
     template_folder="../frontend",
     static_folder="../frontend"
 )
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", transports=["websocket", "polling"])
 
 # ================== MEDIAPIPE SETUP ==================
 hands = None
