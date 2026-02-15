@@ -1,203 +1,1149 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Gesture Controlled Story</title>
+<meta charset="UTF-8">
+<title>FreshMart – Gesture Store</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%2322c55e'/%3E%3Ctext x='8' y='12' font-size='10' text-anchor='middle' fill='%23fff'%3EF%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 
-  <style>
-    body {
-      font-family: Georgia, serif;
-      line-height: 1.6;
-      padding: 20px;
-      transition: background 0.3s, color 0.3s;
-    }
+<style>
+:root {
+  --green: #16a34a;
+  --green-light: #22c55e;
+  --green-glow: rgba(34,197,94,0.4);
+  --accent: #f59e0b;
+  --red: #ef4444;
+  --bg: #0a0f0a;
+  --bg2: #0f1a0f;
+  --surface: rgba(15,30,15,0.85);
+  --border: rgba(34,197,94,0.2);
+  --text: #f0fdf4;
+  --muted: rgba(240,253,244,0.55);
+}
 
-    video {
-      width: 220px;
-      position: fixed;
-      right: 20px;
-      top: 20px;
-      border: 2px solid black;
-      background: #000;
-    }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-    #status {
-      position: fixed;
-      top: 260px;
-      right: 20px;
-      background: #eee;
-      padding: 8px;
-      font-weight: bold;
-    }
+body {
+  margin:0; overflow:hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  user-select: none;
+}
 
-    .story p {
-      margin-bottom: 20px;
-      padding: 10px;
-    }
+/* Scanline overlay for depth */
+body::after {
+  content:'';
+  position:fixed; inset:0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+  pointer-events:none; z-index:100;
+}
 
-    .highlight {
-      background: yellow;
-    }
+/* ── THREE.JS CANVAS ── */
+#threeCanvas {
+  position:fixed; inset:0; z-index:0;
+}
 
-    .dark {
-      background: #121212;
-      color: #f5f5f5;
-    }
-  </style>
+/* ── TOP BAR ── */
+.topbar {
+  position:fixed; top:0; left:0; right:0;
+  height:64px;
+  background: rgba(10,15,10,0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display:flex; align-items:center;
+  padding: 0 32px;
+  z-index:50;
+  gap:24px;
+}
+
+.brand {
+  font-family:'Syne',sans-serif;
+  font-size:24px; font-weight:800;
+  color: var(--green-light);
+  letter-spacing:-0.5px;
+  flex-shrink:0;
+}
+.brand span { color: var(--accent); }
+
+.nav-tabs {
+  display:flex; gap:4px; flex:1;
+}
+
+.nav-tab {
+  padding: 6px 16px;
+  border-radius:8px;
+  font-size:13px; font-weight:500;
+  color: var(--muted);
+  cursor:pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+.nav-tab:hover, .nav-tab.active {
+  color: var(--text);
+  background: rgba(34,197,94,0.12);
+  border-color: var(--border);
+}
+
+.topbar-right {
+  display:flex; align-items:center; gap:16px;
+}
+
+.cart-bubble {
+  position:relative; cursor:pointer;
+  width:44px; height:44px;
+  background: rgba(34,197,94,0.15);
+  border: 1px solid var(--border);
+  border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px;
+  transition: all 0.2s;
+}
+.cart-bubble:hover {
+  background: rgba(34,197,94,0.25);
+  border-color: var(--green-light);
+}
+.cart-count {
+  position:absolute; top:-6px; right:-6px;
+  background: var(--accent);
+  color:#000; font-size:11px; font-weight:700;
+  width:20px; height:20px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Syne',sans-serif;
+}
+
+/* ── GESTURE STATUS BAR ── */
+.gesture-bar {
+  position:fixed; top:64px; left:0; right:0;
+  padding:8px 32px;
+  background: rgba(10,15,10,0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  display:flex; align-items:center; gap:16px;
+  z-index:50;
+}
+
+.gesture-pill {
+  display:flex; align-items:center; gap:8px;
+  background: rgba(34,197,94,0.1);
+  border: 1px solid var(--border);
+  border-radius:20px;
+  padding: 4px 14px;
+}
+.gesture-dot {
+  width:8px; height:8px; border-radius:50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+.gesture-dot.active { background: var(--green-light); box-shadow: 0 0 8px var(--green-glow); }
+.gesture-label {
+  font-size:12px; font-weight:500; color: var(--text);
+  font-family:'Syne',sans-serif; letter-spacing:1px;
+  text-transform:uppercase;
+}
+
+.gesture-tip {
+  font-size:12px; color: var(--muted);
+  margin-left:auto;
+}
+
+/* ── PRODUCT GRID ── */
+.product-grid {
+  position:fixed;
+  top:112px; left:0; right:0; bottom:0;
+  display:grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap:12px;
+  padding:16px 20px;
+  z-index:20;
+  pointer-events:none;
+}
+
+/* ── PRODUCT CARD ── */
+.pcard {
+  background: rgba(10,22,10,0.82);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius:16px;
+  padding:14px;
+  display:flex; flex-direction:column;
+  align-items:center;
+  transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+  position:relative;
+  overflow:hidden;
+  pointer-events:all;
+  cursor:pointer;
+}
+
+.pcard::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.06) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+.pcard:hover, .pcard.hovered {
+  border-color: var(--green-light);
+  background: rgba(14,30,14,0.95);
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 20px 60px rgba(34,197,94,0.2), 0 0 0 1px rgba(34,197,94,0.3);
+}
+
+.pcard.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 20px 60px rgba(245,158,11,0.3);
+  transform: translateY(-8px) scale(1.04);
+}
+
+.pcard.in-cart::after {
+  content:'✓';
+  position:absolute; top:8px; right:8px;
+  width:20px; height:20px;
+  background: var(--green);
+  color:#fff; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700;
+}
+
+.pcard-emoji {
+  font-size:40px;
+  margin-bottom:8px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+  transition: transform 0.3s;
+}
+.pcard:hover .pcard-emoji, .pcard.hovered .pcard-emoji {
+  transform: scale(1.15) rotate(-5deg);
+}
+
+.pcard-name {
+  font-family:'Syne',sans-serif;
+  font-size:12px; font-weight:700;
+  color: var(--text);
+  text-align:center; margin-bottom:3px;
+  letter-spacing:0.2px;
+}
+
+.pcard-weight {
+  font-size:10px; color: var(--muted);
+  margin-bottom:8px;
+}
+
+.pcard-bottom {
+  display:flex; align-items:center; justify-content:space-between;
+  width:100%; gap:6px;
+}
+
+.pcard-price {
+  font-family:'Syne',sans-serif;
+  font-size:15px; font-weight:800;
+  color: var(--green-light);
+}
+
+.pcard-rating {
+  font-size:10px; color: var(--accent);
+  display:flex; align-items:center; gap:2px;
+}
+
+.add-btn {
+  width:26px; height:26px;
+  background: var(--green);
+  border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; color:#fff;
+  transition: all 0.2s;
+  flex-shrink:0;
+}
+.pcard:hover .add-btn, .pcard.hovered .add-btn {
+  background: var(--green-light);
+  transform: scale(1.15);
+}
+
+/* ── SELECTED PRODUCT PANEL ── */
+.selected-panel {
+  position:fixed;
+  top:50%; left:50%; transform:translate(-50%,-50%) scale(0.85);
+  width:400px;
+  background: rgba(8,18,8,0.97);
+  border: 1px solid rgba(34,197,94,0.4);
+  border-radius:24px;
+  padding:32px;
+  z-index:80;
+  opacity:0;
+  pointer-events:none;
+  transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  backdrop-filter: blur(30px);
+  box-shadow: 0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(34,197,94,0.2);
+}
+.selected-panel.show {
+  opacity:1; transform:translate(-50%,-50%) scale(1);
+  pointer-events:all;
+}
+.panel-emoji { font-size:72px; text-align:center; margin-bottom:16px; display:block; }
+.panel-name {
+  font-family:'Syne',sans-serif;
+  font-size:24px; font-weight:800;
+  text-align:center; margin-bottom:4px;
+}
+.panel-meta { font-size:13px; color:var(--muted); text-align:center; margin-bottom:16px; }
+.panel-price { font-family:'Syne',sans-serif; font-size:36px; font-weight:800; color:var(--green-light); text-align:center; margin-bottom:8px; }
+.panel-desc { font-size:13px; color:var(--muted); text-align:center; line-height:1.6; margin-bottom:20px; }
+.panel-btns { display:flex; gap:10px; }
+.panel-btn {
+  flex:1; padding:12px;
+  border-radius:12px; font-size:14px; font-weight:600;
+  font-family:'Syne',sans-serif;
+  cursor:pointer; transition: all 0.2s;
+  border:none;
+}
+.panel-btn.add {
+  background: var(--green);
+  color:#fff;
+}
+.panel-btn.add:hover { background: var(--green-light); }
+.panel-btn.close {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.panel-btn.close:hover { background: rgba(255,255,255,0.14); }
+
+/* ── CART DRAWER ── */
+.cart-drawer {
+  position:fixed; top:0; right:-420px; bottom:0;
+  width:400px;
+  background: rgba(8,18,8,0.98);
+  backdrop-filter: blur(30px);
+  border-left: 1px solid var(--border);
+  z-index:90;
+  transition: right 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  display:flex; flex-direction:column;
+  padding:24px;
+  box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+}
+.cart-drawer.open { right:0; }
+
+.cart-drawer h2 {
+  font-family:'Syne',sans-serif;
+  font-size:22px; font-weight:800;
+  margin-bottom:20px;
+  display:flex; align-items:center; gap:10px;
+}
+
+.cart-items { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+.cart-items::-webkit-scrollbar { width:4px; }
+.cart-items::-webkit-scrollbar-thumb { background: var(--border); border-radius:2px; }
+
+.cart-item {
+  display:flex; align-items:center; gap:12px;
+  background: rgba(34,197,94,0.06);
+  border: 1px solid var(--border);
+  border-radius:12px; padding:12px;
+  animation: slideIn 0.3s ease;
+}
+@keyframes slideIn {
+  from { opacity:0; transform:translateX(20px); }
+  to { opacity:1; transform:translateX(0); }
+}
+.ci-emoji { font-size:28px; }
+.ci-info { flex:1; }
+.ci-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; }
+.ci-qty { font-size:11px; color:var(--muted); }
+.ci-price { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:var(--green-light); }
+.ci-remove { font-size:16px; cursor:pointer; color:var(--muted); transition:color 0.2s; }
+.ci-remove:hover { color:var(--red); }
+
+.cart-footer { border-top:1px solid var(--border); padding-top:16px; margin-top:16px; }
+.cart-total { display:flex; justify-content:space-between; margin-bottom:16px; }
+.cart-total span { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; }
+.cart-total strong { font-family:'Syne',sans-serif; font-size:20px; color:var(--green-light); }
+.checkout-btn {
+  width:100%; padding:14px;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%);
+  color:#fff; border:none; border-radius:14px;
+  font-family:'Syne',sans-serif; font-size:16px; font-weight:700;
+  cursor:pointer; transition:all 0.2s;
+  letter-spacing:0.5px;
+}
+.checkout-btn:hover { transform:translateY(-2px); box-shadow:0 8px 30px var(--green-glow); }
+
+/* ── GESTURE GUIDE ── */
+.gesture-guide {
+  position:fixed; bottom:20px; left:20px;
+  background: rgba(8,18,8,0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius:16px;
+  padding:16px 20px;
+  z-index:50;
+  min-width:240px;
+}
+.gesture-guide h4 {
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+  color:var(--green-light); margin-bottom:12px; letter-spacing:1px;
+  text-transform:uppercase;
+}
+.gi { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:12px; color:var(--muted); }
+.gi-icon {
+  width:28px; height:28px; background: rgba(34,197,94,0.1);
+  border: 1px solid var(--border); border-radius:7px;
+  display:flex; align-items:center; justify-content:center; font-size:15px;
+  flex-shrink:0;
+}
+
+/* ── VIDEO / OVERLAY ── */
+video {
+  position:fixed; bottom:20px; right:20px;
+  width:180px; height:135px;
+  border: 2px solid var(--border);
+  border-radius:14px;
+  transform: scaleX(-1);
+  z-index:50;
+  object-fit:cover;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+}
+#overlay {
+  position:fixed; bottom:20px; right:20px;
+  width:180px; height:135px;
+  border-radius:14px; pointer-events:none; z-index:51;
+  image-rendering:pixelated;
+}
+
+/* ── TOAST NOTIFICATION ── */
+.toast {
+  position:fixed; top:130px; right:20px;
+  background: rgba(22,163,74,0.95);
+  backdrop-filter:blur(10px);
+  border: 1px solid var(--green-light);
+  border-radius:12px; padding:12px 20px;
+  font-family:'Syne',sans-serif; font-size:14px; font-weight:600;
+  z-index:200;
+  transform: translateX(120%);
+  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  max-width:260px;
+}
+.toast.show { transform: translateX(0); }
+
+/* ── CURSOR HIGHLIGHT ── */
+.cursor-ring {
+  position:fixed; width:40px; height:40px;
+  border: 2px solid var(--green-light);
+  border-radius:50%; pointer-events:none;
+  z-index:300; opacity:0;
+  transform:translate(-50%,-50%);
+  transition: opacity 0.3s, width 0.2s, height 0.2s;
+  box-shadow: 0 0 20px var(--green-glow);
+}
+.cursor-ring.active { opacity:1; }
+
+/* ── CATEGORY BADGE ── */
+.cat-badge {
+  position:absolute; top:8px; left:8px;
+  background: rgba(34,197,94,0.15);
+  border: 1px solid var(--border);
+  border-radius:6px; padding:2px 7px;
+  font-size:9px; font-weight:600; color:var(--green-light);
+  font-family:'Syne',sans-serif; text-transform:uppercase; letter-spacing:0.5px;
+}
+
+/* ── LOADING ── */
+.loader {
+  position:fixed; inset:0;
+  background: var(--bg);
+  z-index:500;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px;
+  transition: opacity 0.5s;
+}
+.loader.hidden { opacity:0; pointer-events:none; }
+.loader-logo {
+  font-family:'Syne',sans-serif; font-size:36px; font-weight:800;
+  color:var(--green-light);
+}
+.loader-bar-track {
+  width:200px; height:3px; background: rgba(255,255,255,0.1); border-radius:2px;
+}
+.loader-bar {
+  height:100%; background: var(--green-light); border-radius:2px;
+  width:0%; transition: width 0.3s;
+}
+.loader-text { font-size:12px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; }
+
+/* ── PARTICLE EFFECT ── */
+.particle {
+  position:fixed; pointer-events:none; z-index:250;
+  border-radius:50%; animation: particleAnim 0.8s ease-out forwards;
+}
+@keyframes particleAnim {
+  0% { opacity:1; transform:scale(1) translate(0,0); }
+  100% { opacity:0; transform:scale(0.3) translate(var(--dx),var(--dy)); }
+}
+
+/* Scrollbar for categories */
+.category-bar {
+  position:fixed; top:112px; left:0; right:0;
+  padding:0 20px;
+  height:0; overflow:hidden; z-index:40;
+}
+
+/* Active category filter indicator in gesture bar */
+.cat-filter {
+  background: rgba(245,158,11,0.15);
+  border: 1px solid rgba(245,158,11,0.4);
+  border-radius:20px; padding:4px 14px;
+  font-size:12px; color:var(--accent);
+  font-family:'Syne',sans-serif; font-weight:600; letter-spacing:0.5px;
+}
+</style>
 </head>
-
 <body>
 
-<h1>📖 Gesture Controlled Story</h1>
-
-<div class="story" id="story">
-  <p>Once upon a time, in a quiet village surrounded by green hills, there lived a curious boy named Aarav.</p>
-
-  <p>Aarav loved exploring the forest near his home. Every tree, every sound, and every shadow fascinated him.</p>
-
-  <p>One evening, while following a glowing butterfly, he discovered an ancient door hidden behind vines.</p>
-
-  <p>The door slowly opened, revealing a world filled with floating islands and shimmering lights.</p>
-
-  <p>That night changed Aarav forever, teaching him that courage and curiosity unlock the greatest adventures.</p>
-
-  <p>And so, the boy who once wandered the forest became a legend whispered by the wind.</p>
+<!-- Loader -->
+<div class="loader" id="loader">
+  <div class="loader-logo">🛒 FreshMart</div>
+  <div class="loader-bar-track"><div class="loader-bar" id="loaderBar"></div></div>
+  <div class="loader-text">Initializing gesture controls...</div>
 </div>
 
-<video id="video" autoplay muted playsinline style="transform: scaleX(-1);"></video>
-<div id="status">Waiting for gesture...</div>
+<!-- Cursor Ring -->
+<div class="cursor-ring" id="cursorRing"></div>
 
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="brand">Fresh<span>Mart</span></div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="filterCategory('all')">All</div>
+    <div class="nav-tab" onclick="filterCategory('fruits')">Fruits</div>
+    <div class="nav-tab" onclick="filterCategory('vegetables')">Vegetables</div>
+    <div class="nav-tab" onclick="filterCategory('dairy')">Dairy</div>
+    <div class="nav-tab" onclick="filterCategory('bakery')">Bakery</div>
+    <div class="nav-tab" onclick="filterCategory('drinks')">Drinks</div>
+    <div class="nav-tab" onclick="filterCategory('snacks')">Snacks</div>
+  </div>
+  <div class="topbar-right">
+    <div class="cart-bubble" onclick="toggleCart()" id="cartBubble">
+      🛒
+      <div class="cart-count" id="cartCount">0</div>
+    </div>
+  </div>
+</div>
 
-<!-- MediaPipe Hands + Camera utils -->
+<!-- Gesture Status Bar -->
+<div class="gesture-bar">
+  <div class="gesture-pill">
+    <div class="gesture-dot" id="gestureDot"></div>
+    <div class="gesture-label" id="gestureLabel">READY</div>
+  </div>
+  <div class="gesture-tip" id="gestureTip">👋 Show your hand to start shopping</div>
+</div>
+
+<!-- Product Grid -->
+<div class="product-grid" id="productGrid"></div>
+
+<!-- Selected Product Panel -->
+<div class="selected-panel" id="selectedPanel">
+  <span class="panel-emoji" id="panelEmoji">🍎</span>
+  <div class="panel-name" id="panelName">Product</div>
+  <div class="panel-meta" id="panelMeta">Category • Weight</div>
+  <div class="panel-price" id="panelPrice">₹0</div>
+  <div class="panel-desc" id="panelDesc">Description</div>
+  <div class="panel-btns">
+    <button class="panel-btn add" id="panelAddBtn" onclick="addSelectedToCart()">🛒 Add to Cart</button>
+    <button class="panel-btn close" onclick="closePanel()">✕ Close</button>
+  </div>
+</div>
+
+<!-- Cart Drawer -->
+<div class="cart-drawer" id="cartDrawer">
+  <h2>🛒 Your Cart</h2>
+  <div class="cart-items" id="cartItems">
+    <div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">
+      Your cart is empty.<br>Use gestures to add items!
+    </div>
+  </div>
+  <div class="cart-footer">
+    <div class="cart-total">
+      <span>Total</span>
+      <strong id="cartTotal">₹0.00</strong>
+    </div>
+    <button class="checkout-btn">✨ Checkout</button>
+  </div>
+</div>
+
+<!-- Gesture Guide -->
+<div class="gesture-guide">
+  <h4>✋ Gesture Controls</h4>
+  <div class="gi"><div class="gi-icon">👆</div> Point – Hover product</div>
+  <div class="gi"><div class="gi-icon">🤏</div> Pinch – Select / Add to cart</div>
+  <div class="gi"><div class="gi-icon">✌️</div> Two fingers – Next product</div>
+  <div class="gi"><div class="gi-icon">✊</div> Fist – Close / Clear</div>
+  <div class="gi"><div class="gi-icon">✋</div> Open palm – View cart</div>
+  <div class="gi"><div class="gi-icon">👍</div> Thumbs up – Confirm add</div>
+  <div class="gi"><div class="gi-icon">🤘</div> Rock – Previous product</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">Item added!</div>
+
+<!-- Video + Overlay -->
+<video id="video" autoplay muted playsinline></video>
+<canvas id="overlay" width="640" height="480"></canvas>
+
+<!-- MediaPipe -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
-<script>
-// Detect if running on production or locally
-const backendUrl = window.location.origin;
-const socket = io(backendUrl, {
-  transports: ["websocket", "polling"]
-});
-const video = document.getElementById("video");
-const status = document.getElementById("status");
-const paragraphs = document.querySelectorAll(".story p");
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
 
-let highlightIndex = 0;
+/* ═══════════════════════════════════════════════
+   PRODUCT DATA
+═══════════════════════════════════════════════ */
+const PRODUCTS = [
+  { id:1,  emoji:'🍎', name:'Fuji Apples',       cat:'fruits',     weight:'1 kg',    price:149, rating:4.8, desc:'Crisp and sweet Japanese Fuji apples, freshly sourced from Himachal Pradesh.' },
+  { id:2,  emoji:'🍌', name:'Bananas',           cat:'fruits',     weight:'500g',    price:49,  rating:4.6, desc:'Organic Cavendish bananas, perfectly ripened for natural sweetness.' },
+  { id:3,  emoji:'🍇', name:'Red Grapes',        cat:'fruits',     weight:'500g',    price:99,  rating:4.7, desc:'Juicy seedless red grapes, imported from Maharashtra\'s finest vineyards.' },
+  { id:4,  emoji:'🥦', name:'Broccoli',          cat:'vegetables', weight:'500g',    price:79,  rating:4.5, desc:'Farm-fresh broccoli, packed with vitamins and minerals for a healthy meal.' },
+  { id:5,  emoji:'🥕', name:'Carrots',           cat:'vegetables', weight:'1 kg',    price:59,  rating:4.7, desc:'Crunchy orange carrots, direct from Punjab farms, rich in beta-carotene.' },
+  { id:6,  emoji:'🧅', name:'Onions',            cat:'vegetables', weight:'2 kg',    price:69,  rating:4.4, desc:'Fresh red onions, essential kitchen staple with full robust flavour.' },
+  { id:7,  emoji:'🥛', name:'Full Cream Milk',   cat:'dairy',      weight:'1 L',     price:72,  rating:4.9, desc:'Pure full cream milk from grass-fed cows, delivered fresh every morning.' },
+  { id:8,  emoji:'🧀', name:'Cheddar Cheese',    cat:'dairy',      weight:'200g',    price:189, rating:4.8, desc:'Mature English cheddar with a sharp, tangy flavour. Perfect for cooking.' },
+  { id:9,  emoji:'🥚', name:'Farm Eggs',         cat:'dairy',      weight:'12 pcs',  price:99,  rating:4.9, desc:'Free-range eggs from organically raised hens, rich in protein and nutrients.' },
+  { id:10, emoji:'🍞', name:'Sourdough Bread',   cat:'bakery',     weight:'400g',    price:129, rating:4.8, desc:'Artisan sourdough baked fresh daily, with a perfectly crispy crust.' },
+  { id:11, emoji:'🥐', name:'Butter Croissant',  cat:'bakery',     weight:'4 pcs',   price:159, rating:4.9, desc:'Flaky, buttery French-style croissants baked fresh every morning.' },
+  { id:12, emoji:'🧁', name:'Blueberry Muffin',  cat:'bakery',     weight:'6 pcs',   price:199, rating:4.7, desc:'Moist blueberry muffins bursting with real blueberries. No preservatives.' },
+  { id:13, emoji:'🍊', name:'Oranges',           cat:'fruits',     weight:'1 kg',    price:89,  rating:4.6, desc:'Sweet and juicy Nagpur oranges, loaded with vitamin C and natural citrus.' },
+  { id:14, emoji:'🥑', name:'Avocado',           cat:'fruits',     weight:'2 pcs',   price:249, rating:4.8, desc:'Perfectly ripened Hass avocados, rich in healthy fats and creamy texture.' },
+  { id:15, emoji:'🌽', name:'Sweet Corn',        cat:'vegetables', weight:'4 pcs',   price:79,  rating:4.5, desc:'Golden sweet corn cobs, perfect for boiling, roasting or grilling.' },
+  { id:16, emoji:'🍫', name:'Dark Chocolate',    cat:'snacks',     weight:'100g',    price:189, rating:4.9, desc:'72% single-origin dark chocolate from Coorg, with rich earthy tones.' },
+  { id:17, emoji:'🍕', name:'Frozen Pizza',      cat:'snacks',     weight:'400g',    price:299, rating:4.5, desc:'Wood-fire style stone-baked frozen pizza with real mozzarella and tomato.' },
+  { id:18, emoji:'🥜', name:'Mixed Nuts',        cat:'snacks',     weight:'250g',    price:349, rating:4.8, desc:'Premium roasted mixed nuts — almonds, cashews, walnuts and pistachios.' },
+  { id:19, emoji:'🧃', name:'Apple Juice',       cat:'drinks',     weight:'1 L',     price:129, rating:4.7, desc:'100% natural cold-pressed apple juice with no added sugar or preservatives.' },
+  { id:20, emoji:'☕', name:'Cold Brew Coffee',  cat:'drinks',     weight:'500 ml',  price:179, rating:4.9, desc:'Slow-steeped single origin Arabica cold brew. Ready to drink.' }
+];
 
-// Initialize MediaPipe Hands
-const hands = new Hands({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-});
+let displayedProducts = [...PRODUCTS];
+let selectedIndex = -1;
+let panelOpen = false;
+let cartOpen = false;
+const cart = [];
 
-hands.setOptions({
-  maxNumHands: 2,
-  modelComplexity: 1,
-  minDetectionConfidence: 0.6,
-  minTrackingConfidence: 0.6
-});
+/* ═══════════════════════════════════════════════
+   THREE.JS AMBIENT SCENE
+═══════════════════════════════════════════════ */
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0f0a, 0.05);
 
-console.log('✅ Hands object created');
+const cam3d = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100);
+cam3d.position.set(0, 4, 12);
+cam3d.lookAt(0, 0, 0);
 
-// Initialize callback before starting camera
-hands.onResults((results) => {
-  console.log('✅ Hands detected:', results.multiHandLandmarks?.length || 0);
-});
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
 
-// Utility to detect gestures client-side
-function fingerOpen(landmarks, tipIdx, mcpIdx) {
-  return landmarks[tipIdx].y < landmarks[mcpIdx].y;
+const canvas = renderer.domElement;
+canvas.id = 'threeCanvas';
+canvas.style.position = 'fixed';
+canvas.style.inset = '0';
+canvas.style.zIndex = '0';
+document.body.prepend(canvas);
+
+// Lights
+const ambient = new THREE.AmbientLight(0x0a2010, 1.5);
+scene.add(ambient);
+
+const greenSpot = new THREE.PointLight(0x22c55e, 2, 20);
+greenSpot.position.set(-6, 6, 4);
+scene.add(greenSpot);
+
+const warmSpot = new THREE.PointLight(0xf59e0b, 0.8, 15);
+warmSpot.position.set(6, 4, 3);
+scene.add(warmSpot);
+
+const blueRim = new THREE.PointLight(0x0ea5e9, 0.4, 12);
+blueRim.position.set(0, -2, -5);
+scene.add(blueRim);
+
+// Floating orbs
+const orbsGroup = new THREE.Group();
+const orbColors = [0x22c55e, 0xf59e0b, 0x0ea5e9, 0x8b5cf6, 0xef4444];
+const orbs = [];
+for (let i = 0; i < 18; i++) {
+  const r = 0.04 + Math.random() * 0.12;
+  const geo = new THREE.SphereGeometry(r, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({
+    color: orbColors[i % orbColors.length],
+    emissive: orbColors[i % orbColors.length],
+    emissiveIntensity: 0.8,
+    metalness: 0.3, roughness: 0.2
+  });
+  const orb = new THREE.Mesh(geo, mat);
+  orb.position.set(
+    (Math.random()-0.5)*18,
+    (Math.random()-0.5)*10,
+    (Math.random()-0.5)*10
+  );
+  orb._speed = 0.3 + Math.random()*0.7;
+  orb._offset = Math.random()*Math.PI*2;
+  orb._radius = 0.5 + Math.random()*2;
+  orb._cx = orb.position.x;
+  orb._cy = orb.position.y;
+  orbsGroup.add(orb);
+  orbs.push(orb);
+}
+scene.add(orbsGroup);
+
+// Reflective floor
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(40,40),
+  new THREE.MeshStandardMaterial({ color:0x0a150a, roughness:0.1, metalness:0.9 })
+);
+floor.rotation.x = -Math.PI/2;
+floor.position.y = -6;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Grid lines on floor
+const gridHelper = new THREE.GridHelper(40, 40, 0x22c55e, 0x1a2e1a);
+gridHelper.position.y = -5.99;
+gridHelper.material.opacity = 0.3;
+gridHelper.material.transparent = true;
+scene.add(gridHelper);
+
+// Floating 3D product icons as glowing boxes
+const productMeshes = [];
+const productColors = [0x22c55e,0xf59e0b,0xef4444,0x0ea5e9,0x8b5cf6];
+for (let i = 0; i < 8; i++) {
+  const geo = new THREE.BoxGeometry(0.6,0.6,0.6);
+  const mat = new THREE.MeshStandardMaterial({
+    color: productColors[i%productColors.length],
+    emissive: productColors[i%productColors.length],
+    emissiveIntensity: 0.2,
+    metalness:0.6, roughness:0.3,
+    transparent:true, opacity:0.6
+  });
+  const box = new THREE.Mesh(geo, mat);
+  box.position.set((Math.random()-0.5)*14, (Math.random()-0.5)*6, (Math.random()-0.5)*6-2);
+  box.castShadow = true;
+  box._offset = Math.random()*Math.PI*2;
+  box._speed = 0.3+Math.random()*0.5;
+  scene.add(box);
+  productMeshes.push(box);
 }
 
-function detectGestureFromLandmarks(landmarks) {
-  if (!landmarks || landmarks.length < 21) return 'none';
-  const thumb = fingerOpen(landmarks, 4, 2);
-  const index = fingerOpen(landmarks, 8, 5);
-  const middle = fingerOpen(landmarks, 12, 9);
-  const ring = fingerOpen(landmarks, 16, 13);
-  const pinky = fingerOpen(landmarks, 20, 17);
+function animateScene() {
+  requestAnimationFrame(animateScene);
+  const t = Date.now()*0.001;
 
-  if (!thumb && !index && !middle && !ring && !pinky) return 'fist';
-  if (thumb && index && middle && ring && pinky) return 'open_palm';
-  if (thumb && !index && !middle && !ring && !pinky) return 'thumbs_up';
-  if (index && middle && !ring && !pinky) return 'victory';
-  if (index && pinky && !middle && !ring) return 'rock';
-  return 'none';
+  // Orbs
+  orbs.forEach(o => {
+    o.position.x = o._cx + Math.sin(t*o._speed+o._offset)*o._radius;
+    o.position.y = o._cy + Math.cos(t*o._speed*0.7+o._offset)*o._radius*0.5;
+  });
+
+  // Boxes
+  productMeshes.forEach(b => {
+    b.position.y += Math.sin(t*b._speed+b._offset)*0.003;
+    b.rotation.x = t*b._speed*0.3;
+    b.rotation.y = t*b._speed*0.5;
+  });
+
+  // Pulsing lights
+  greenSpot.intensity = 2 + Math.sin(t*0.7)*0.5;
+  warmSpot.intensity = 0.8 + Math.sin(t*1.1)*0.2;
+
+  // Slow camera drift
+  cam3d.position.x = Math.sin(t*0.1)*1.5;
+  cam3d.position.y = 4 + Math.sin(t*0.07)*0.5;
+  cam3d.lookAt(0,0,0);
+
+  renderer.render(scene, cam3d);
+}
+animateScene();
+
+window.addEventListener('resize', () => {
+  cam3d.aspect = innerWidth/innerHeight;
+  cam3d.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ═══════════════════════════════════════════════
+   PRODUCT UI
+═══════════════════════════════════════════════ */
+function renderGrid() {
+  const grid = document.getElementById('productGrid');
+  grid.innerHTML = '';
+  displayedProducts.forEach((p, i) => {
+    const inCart = cart.some(c => c.id === p.id);
+    const card = document.createElement('div');
+    card.className = 'pcard' + (inCart ? ' in-cart' : '');
+    card.dataset.index = i;
+    card.dataset.id = p.id;
+    card.innerHTML = `
+      <div class="cat-badge">${p.cat}</div>
+      <div class="pcard-emoji">${p.emoji}</div>
+      <div class="pcard-name">${p.name}</div>
+      <div class="pcard-weight">${p.weight}</div>
+      <div class="pcard-bottom">
+        <div class="pcard-price">₹${p.price}</div>
+        <div class="pcard-rating">⭐ ${p.rating}</div>
+        <div class="add-btn">+</div>
+      </div>
+    `;
+    card.addEventListener('click', () => openPanel(i));
+    grid.appendChild(card);
+  });
+  // Highlight selected
+  if (selectedIndex >= 0) highlightCard(selectedIndex);
 }
 
-// Client-side debounce
-let lastSentGesture = null;
-let lastSentTs = 0;
-const CLIENT_DEBOUNCE_MS = 350;
+function highlightCard(idx) {
+  document.querySelectorAll('.pcard').forEach((c,i) => {
+    c.classList.toggle('hovered', i === idx);
+  });
+}
 
-hands.onResults((results) => {
-  let gesture = 'none';
-  
-  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-    console.log('✅ Hand detected! Landmarks:', results.multiHandLandmarks.length);
-    const lm = results.multiHandLandmarks[0];
-    gesture = detectGestureFromLandmarks(lm);
+function openPanel(idx) {
+  selectedIndex = idx;
+  const p = displayedProducts[idx];
+  if (!p) return;
+  document.getElementById('panelEmoji').textContent = p.emoji;
+  document.getElementById('panelName').textContent = p.name;
+  document.getElementById('panelMeta').textContent = `${p.cat} • ${p.weight} • ⭐ ${p.rating}`;
+  document.getElementById('panelPrice').textContent = `₹${p.price}`;
+  document.getElementById('panelDesc').textContent = p.desc;
+  document.getElementById('selectedPanel').classList.add('show');
+  panelOpen = true;
+  highlightCard(idx);
+}
 
-    // detect pinch
-    const dx = lm[4].x - lm[8].x;
-    const dy = lm[4].y - lm[8].y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < 0.05) gesture = 'click';
-  } else {
-    console.log('⚠️ No hands detected');
+function closePanel() {
+  document.getElementById('selectedPanel').classList.remove('show');
+  panelOpen = false;
+  document.querySelectorAll('.pcard').forEach(c => c.classList.remove('hovered','selected'));
+}
+
+window.closePanel = closePanel;
+
+function addSelectedToCart() {
+  if (selectedIndex < 0) return;
+  const p = displayedProducts[selectedIndex];
+  if (!p) return;
+  const existing = cart.find(c => c.id === p.id);
+  if (existing) { existing.qty++; }
+  else { cart.push({...p, qty:1}); }
+  updateCart();
+  showToast(`${p.emoji} ${p.name} added!`);
+  spawnParticles(innerWidth/2, innerHeight/2);
+  closePanel();
+  renderGrid();
+}
+window.addSelectedToCart = addSelectedToCart;
+
+function addToCart(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p) return;
+  const existing = cart.find(c => c.id === id);
+  if (existing) { existing.qty++; } else { cart.push({...p, qty:1}); }
+  updateCart();
+  showToast(`${p.emoji} ${p.name} added!`);
+  renderGrid();
+}
+
+function updateCart() {
+  const count = cart.reduce((s,c) => s+c.qty, 0);
+  const total = cart.reduce((s,c) => s+c.price*c.qty, 0);
+  document.getElementById('cartCount').textContent = count;
+  document.getElementById('cartTotal').textContent = `₹${total.toFixed(2)}`;
+
+  const itemsEl = document.getElementById('cartItems');
+  if (cart.length === 0) {
+    itemsEl.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Your cart is empty.<br>Use gestures to add items!</div>';
+    return;
   }
+  itemsEl.innerHTML = cart.map((c,i) => `
+    <div class="cart-item">
+      <div class="ci-emoji">${c.emoji}</div>
+      <div class="ci-info">
+        <div class="ci-name">${c.name}</div>
+        <div class="ci-qty">Qty: ${c.qty} × ₹${c.price}</div>
+      </div>
+      <div class="ci-price">₹${(c.price*c.qty).toFixed(0)}</div>
+      <div class="ci-remove" onclick="removeFromCart(${i})">✕</div>
+    </div>
+  `).join('');
+}
+
+window.removeFromCart = function(i) {
+  cart.splice(i,1);
+  updateCart();
+  renderGrid();
+};
+
+function toggleCart() {
+  cartOpen = !cartOpen;
+  document.getElementById('cartDrawer').classList.toggle('open', cartOpen);
+}
+window.toggleCart = toggleCart;
+
+window.filterCategory = function(cat) {
+  displayedProducts = cat === 'all' ? [...PRODUCTS] : PRODUCTS.filter(p => p.cat === cat);
+  selectedIndex = -1;
+  closePanel();
+  renderGrid();
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase() === cat || (cat==='all' && t.textContent==='All'));
+  });
+};
+
+/* ═══════════════════════════════════════════════
+   TOAST & PARTICLES
+═══════════════════════════════════════════════ */
+let toastTimeout;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function spawnParticles(x, y) {
+  const colors = ['#22c55e','#f59e0b','#fff','#0ea5e9'];
+  for (let i = 0; i < 12; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = 6 + Math.random()*10;
+    const dx = (Math.random()-0.5)*160 + 'px';
+    const dy = (Math.random()-0.5)*160 + 'px';
+    p.style.cssText = `
+      left:${x}px; top:${y}px;
+      width:${size}px; height:${size}px;
+      background:${colors[i%colors.length]};
+      --dx:${dx}; --dy:${dy};
+    `;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 800);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   MEDIAPIPE GESTURE CONTROL
+═══════════════════════════════════════════════ */
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const cursorRing = document.getElementById('cursorRing');
+
+const DEBOUNCE = 450;
+let lastGesture = null, lastGestureTime = 0;
+let hoveredCardIndex = -1;
+let lastIndexX = 0.5, lastIndexY = 0.5;
+
+const hands = new Hands({
+  locateFile: f => {
+    const base = f.split('/').pop().replace('_simd','');
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${base}`;
+  }
+});
+hands.setOptions({
+  maxNumHands:1, minDetectionConfidence:0.4, minTrackingConfidence:0.4,
+  modelComplexity:1, staticImageMode:false
+});
+
+function dist(a,b) { return Math.hypot(a.x-b.x,a.y-b.y); }
+function fingerUp(tip,mcp) { return tip.y < mcp.y; }
+
+function setGestureUI(label, tip) {
+  const dot = document.getElementById('gestureDot');
+  const lbl = document.getElementById('gestureLabel');
+  const tipEl = document.getElementById('gestureTip');
+  dot.classList.toggle('active', label !== 'NONE' && label !== 'READY');
+  lbl.textContent = label;
+  tipEl.textContent = tip;
+}
+
+// Move virtual cursor based on index finger
+function updateCursor(lm) {
+  const ix = 1 - lm[8].x; // mirror
+  const iy = lm[8].y;
+  lastIndexX = ix; lastIndexY = iy;
+  const px = ix * innerWidth;
+  const py = iy * innerHeight;
+  cursorRing.style.left = px+'px';
+  cursorRing.style.top = py+'px';
+  cursorRing.classList.add('active');
+
+  // Hit-test product cards
+  const cards = document.querySelectorAll('.pcard');
+  let hit = -1;
+  cards.forEach((c,i) => {
+    const r = c.getBoundingClientRect();
+    if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) hit = i;
+  });
+  if (hit !== hoveredCardIndex) {
+    hoveredCardIndex = hit;
+    highlightCard(hit);
+  }
+}
+
+hands.onResults(results => {
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  if (!results.multiHandLandmarks?.length) {
+    setGestureUI('READY', '👋 Show your hand to browse');
+    cursorRing.classList.remove('active');
+    return;
+  }
+
+  const lm = results.multiHandLandmarks[0];
+
+  // Draw landmarks
+  try {
+    const vw = video.videoWidth||640, vh = video.videoHeight||480;
+    overlay.width = vw; overlay.height = vh;
+    octx.fillStyle = 'rgba(34,197,94,0.9)';
+    octx.strokeStyle = 'rgba(0,0,0,0.5)';
+    octx.lineWidth = 2;
+    for (const p of lm) {
+      octx.beginPath();
+      octx.arc(p.x*vw, p.y*vh, 5, 0, Math.PI*2);
+      octx.fill(); octx.stroke();
+    }
+    const d = dist(lm[4],lm[8]);
+    octx.beginPath();
+    octx.moveTo(lm[4].x*vw, lm[4].y*vh);
+    octx.lineTo(lm[8].x*vw, lm[8].y*vh);
+    octx.strokeStyle = d<0.07 ? 'rgba(245,158,11,0.9)' : 'rgba(255,255,255,0.5)';
+    octx.lineWidth=3; octx.stroke();
+    octx.fillStyle='white'; octx.font='16px Syne,sans-serif';
+    octx.fillText('d='+d.toFixed(3), 8, 20);
+  } catch(e){}
+
+  // Update cursor
+  updateCursor(lm);
+
+  // Classify gesture
+  const thumb  = fingerUp(lm[4],  lm[2]);
+  const index  = fingerUp(lm[8],  lm[5]);
+  const middle = fingerUp(lm[12], lm[9]);
+  const ring   = fingerUp(lm[16], lm[13]);
+  const pinky  = fingerUp(lm[20], lm[17]);
+  const pinchDist = dist(lm[4], lm[8]);
+
+  let gesture = 'none', tip = '';
+
+  if (pinchDist < 0.07) {
+    gesture = 'pinch'; tip = '🤏 Pinching — select / add to cart';
+  } else if (!thumb && !index && !middle && !ring && !pinky) {
+    gesture = 'fist'; tip = '✊ Fist — close panel / clear hover';
+  } else if (thumb && index && middle && ring && pinky) {
+    gesture = 'open_palm'; tip = '✋ Open palm — toggle cart';
+  } else if (thumb && !index && !middle && !ring && !pinky) {
+    gesture = 'thumbs_up'; tip = '👍 Thumbs up — confirm add to cart';
+  } else if (index && middle && !ring && !pinky) {
+    gesture = 'two_fingers'; tip = '✌️ Two fingers — next product';
+  } else if (index && pinky && !middle && !ring) {
+    gesture = 'rock'; tip = '🤘 Rock — previous product';
+  } else if (index && !middle && !ring && !pinky) {
+    gesture = 'point'; tip = '👆 Pointing — hovering';
+  }
+
+  setGestureUI(gesture === 'none' ? 'DETECTING' : gesture.toUpperCase().replace('_',' '), tip || '🖐 Try a gesture!');
 
   const now = Date.now();
-  if (gesture !== lastSentGesture || (now - lastSentTs) > CLIENT_DEBOUNCE_MS) {
-    console.log('Sending gesture ->', gesture);
-    socket.emit('gesture', gesture); // send to server
-    lastSentGesture = gesture;
-    lastSentTs = now;
-  }
+  if (gesture === 'none' || gesture === 'point') return; // point just hovers, no action
+  if (gesture === lastGesture && (now - lastGestureTime) < DEBOUNCE) return;
+  if (gesture === lastGesture) return; // don't repeat unless changed
 
-  status.innerText = 'Gesture: ' + gesture;
-});
+  lastGesture = gesture;
+  lastGestureTime = now;
 
-// Start camera
-console.log('Initializing camera...');
-const camera = new Camera(video, {
-  onFrame: async () => {
-    await hands.send({image: video});
-  },
-  width: 640,
-  height: 480
-});
-
-try {
-  camera.start();
-  console.log('✅ Camera stream started');
-  status.innerText = 'Camera: ON - Detecting...';
-} catch (err) {
-  console.error('❌ Camera error:', err);
-  status.innerText = 'Camera: ERROR - ' + err.message;
-}
-
-// ================== REACT TO SERVER ACTIONS ==================
-socket.on("action", (action) => {
-  console.log('Received action <-', action);
-  switch(action) {
-    case "scroll_down":
-      window.scrollBy(0, 150);
-      break;
-    case "scroll_up":
-      window.scrollBy(0, -150);
-      break;
-    case "select":
-      if (paragraphs[highlightIndex]) {
-        paragraphs.forEach(p => p.classList.remove('highlight'));
-        paragraphs[highlightIndex].classList.add('highlight');
-        paragraphs[highlightIndex].scrollIntoView({behavior:'smooth'});
-        highlightIndex = (highlightIndex + 1) % paragraphs.length;
+  switch(gesture) {
+    case 'pinch':
+      // If panel open → add to cart; else → open hovered card
+      if (panelOpen) {
+        addSelectedToCart();
+      } else if (hoveredCardIndex >= 0) {
+        openPanel(hoveredCardIndex);
+      } else if (displayedProducts.length > 0) {
+        openPanel(0);
       }
       break;
-    case "toggle_theme":
-      document.body.classList.toggle('dark');
+
+    case 'fist':
+      if (panelOpen) { closePanel(); }
+      else if (cartOpen) { toggleCart(); }
+      else {
+        hoveredCardIndex = -1;
+        highlightCard(-1);
+      }
       break;
+
+    case 'open_palm':
+      toggleCart();
+      break;
+
+    case 'thumbs_up':
+      if (panelOpen) { addSelectedToCart(); }
+      else if (hoveredCardIndex >= 0) {
+        const p = displayedProducts[hoveredCardIndex];
+        if (p) { addToCart(p.id); spawnParticles(innerWidth*0.5, innerHeight*0.5); }
+      }
+      break;
+
+    case 'two_fingers': {
+      const next = ((selectedIndex < 0 ? 0 : selectedIndex) + 1) % displayedProducts.length;
+      openPanel(next);
+      break;
+    }
+
+    case 'rock': {
+      const prev = ((selectedIndex < 0 ? 0 : selectedIndex) - 1 + displayedProducts.length) % displayedProducts.length;
+      openPanel(prev);
+      break;
+    }
   }
 });
+
+/* ═══════════════════════════════════════════════
+   CAMERA
+═══════════════════════════════════════════════ */
+const mediaCam = new Camera(video, {
+  onFrame: async () => { try { await hands.send({image:video}); } catch(e){} },
+  width: 640, height: 480
+});
+
+// Loader progress simulation
+let prog = 0;
+const loaderInterval = setInterval(() => {
+  prog += 8 + Math.random()*15;
+  document.getElementById('loaderBar').style.width = Math.min(prog,92)+'%';
+  if (prog > 85) clearInterval(loaderInterval);
+}, 150);
+
+mediaCam.start().then(() => {
+  document.getElementById('loaderBar').style.width = '100%';
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hidden');
+    setTimeout(() => document.getElementById('loader').remove(), 600);
+  }, 500);
+}).catch(err => {
+  console.error('Camera error:', err);
+  document.getElementById('loaderBar').style.width = '100%';
+  document.getElementById('loader').classList.add('hidden');
+  setTimeout(() => document.getElementById('loader').remove(), 600);
+  setGestureUI('NO CAMERA', '❌ Camera unavailable — use mouse instead');
+});
+
+/* Initial render */
+renderGrid();
+
 </script>
+</body>
+</html>
